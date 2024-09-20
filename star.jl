@@ -2,7 +2,7 @@
 using LinearAlgebra
 
 #Angles
-α,β,δ = π/4, π/6, π/8
+α,β,δ = π/8, π/8, π/8
 #Characters classified by luminance
 luminance = "@\$#*!=;:~-,."
 
@@ -12,15 +12,12 @@ terminal_size = displaysize(stdout)
 #Center
 center = round.(Int16,[terminal_size[1]/2 ,terminal_size[2]/2 ])
 #Big radius
-R = center[1]*1.75
-
-#To set how far away you want the star from the screen
-distance=2.0
-
+R = center[1]  
 
 #Star outer points (edges)
 #Setting them to 0.0 since I will use all the terminal for calculations and just round it when printing the point
-outer_points = fill([0.0,0.0,distance],5)
+#You treat the objecy as the center of the plane (not the screen)
+outer_points = fill([0.0,0.0,0.0],5)
 
 θ = 72 #360/5
 
@@ -32,7 +29,7 @@ end
 #Small radius
 r = R/2
 #Each edge will have to corresponding inner points (But since each triangle share a point) it will only save half
-inner_points = [[0.0, 0.0,distance] for _ in 1:5] 
+inner_points = [[0.0, 0.0,0.0] for _ in 1:5] 
 
 for i in 0:4
    current_θ = 58 + (i * θ)
@@ -97,7 +94,9 @@ shades = [light_red, medium_light_red, medium_red, medium_dark_red, dark_red]
 frame = fill(' ', terminal_size)
 
 #Setting the depth of the star
-star_depth = 2
+star_depth = 3
+#To set how far away you want the star from the screen
+distance= R * 1.5
 
 #Vector containing center, outer vertex and inner vertex
 vertex_grid = [[outer_points...,inner_points...] for _ in 1:star_depth]
@@ -111,18 +110,19 @@ for i in 1:star_depth-1
 end
 
 
-
+k1= center[1]*distance*3/4((R+r))
 function update_frame()
    for depth in vertex_grid
       for points in depth
          #It is formatted (y,x)
-         x′ =  points[1]/(distance + points[3])
-         y′ = points[2]/(distance + points[3])
-         pos = round.(Int16,(center[1] - y′,center[2] + x′))
-         if pos[1] == 0
-            pos[1] += 1
+         ooz = 1/(distance + points[3])
+         x′ = k1 * points[1] * ooz
+         y′ = k1 * points[2] * ooz
+         pos = round.(Int16,[center[1] - y′,center[2] + x′])
+         if pos[1] < 1
+            pos[1] = 1
          end
-         ilumin_index = round(Int16,points[3])
+         ilumin_index = round(Int16,points[3]+1)
          if ilumin_index < 1
             ilumin_index = 1
          elseif  ilumin_index > 12
@@ -167,12 +167,13 @@ z_rotation = [cos(δ) sin(δ) 0;
 # end
 while(true)
    print("\x1b[H") #Prints at the top left line
+   frame = fill(' ', terminal_size)
    update_frame()
    print_frame(frame, terminal_size[1],terminal_size[2])
    for (i,depth) in enumerate(vertex_grid)
       for (j,points) in enumerate(depth)               
          #It is formatted (y,x)               
-         vertex_grid[i][j] = z_rotation * points           
+         vertex_grid[i][j] = x_rotation * y_rotation * points           
       end
    end
    sleep(0.5)
