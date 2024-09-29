@@ -47,6 +47,7 @@ light_red, medium_light_red, medium_red, medium_dark_red, dark_red = 211, 204, 1
 shades = [light_red, medium_light_red, medium_red, medium_dark_red, dark_red]
 
 frame = fill(' ', terminal_size)
+z_buffer = fill(Inf, terminal_size[1], terminal_size[2])
 
 #Setting the depth of the star
 star_depth = 3
@@ -64,36 +65,34 @@ for i in 1:star_depth-1
    end
 end
 
-star_triangles = [[[[0,0] for _ in 1:3] for _ in 1:8] for _ in 1:star_depth]
+star_triangles = [[[[0,0,0.0] for _ in 1:3] for _ in 1:8] for _ in 1:star_depth]
 norms = [[0 for _ in 1:8] for _ in 1:star_depth]
 
 k1= center[2]*distance*3/4((R+r))
+
 function update_frame()
-   for (z,depth) in enumerate(vertex_grid)
-      a = [Int16.([0,0]) for _ in 1:10]
-      norms[z] = calculate_luminance(get_triangles(depth[1:5],depth[6:10],3))
-      for (y,points) in enumerate(depth)
-         #It is formatted (y,x)
-         ooz = 1/(distance + points[3])
-         x′ = k1 * points[1] * ooz
-         y′ = k1 * points[2] * ooz
-         pos = round.(Int16,[center[2] - y′,center[1] + x′])
-         a[y] = [pos[2],pos[1]]
-      end
-      star_triangles[z] = get_triangles(a[1:5],a[6:10],2)
+   for (z,vertex) in enumerate(vertex_grid)
+      star_triangles[z] = get_triangles(vertex[1:5],vertex[6:10])
+      norms[z] = calculate_luminance(star_triangles[z])
    end
 end
 
+# Perspective Projection with depth influence
+function project_point(point::Vector{Float64}, distance::Float64, center::Vector{Int16}, k1::Float64)
+   ooz = 1 / (distance + point[3])  # Z-depth projection (inverse of distance)
+   x_proj = round(Int16, center[1] + k1 * point[1] * ooz)  # X projection
+   y_proj = round(Int16, center[2] - k1 * point[2] * ooz)  # Y projection
+   #Comparing with ooz instead of normal Z
+   #Since ooz is related to the screen
+   return [x_proj, y_proj, point[3]]  # Projected X, Y and Z (for Z-buffer)
+end
+
+
 #Now that we have the inner and outer points, now we can define the points for each triangle
 #Each triangle will safe its each 3 points
-function get_triangles(ext_points,int_points,dimension)
-   if dimension == 2
-      xd = [[[0,0] for _ in 1:3] for _ in 1:8]
-   elseif dimension == 3
-      xd = [[[0.0,0.0,0.0] for _ in 1:3] for _ in 1:8]
-   else
-      return -1
-   end
+function get_triangles(ext_points,int_points)
+
+   xd = [[[0.0,0.0,0.0] for _ in 1:3] for _ in 1:8]
    for i in 1:5
       xd[i][1] = ext_points[i]
       for j in 0:1
@@ -106,41 +105,46 @@ function get_triangles(ext_points,int_points,dimension)
       xd[i+5][2] = [int_points[2i%5]...]
       xd[i+5][3] = [int_points[(i - 1) % 2 == 0 ? 3 : 5]...] 
    end
-   return xd
+   tri = copy(xd)
+   return tri
 end
 
 function calculate_luminance(triangles)
-
-   light_value = [0 for _ in 1:8]
+   light_values = [0 for _ in 1:8]
    for i in 1:8
-      A = triangles[i][1]
-      B = triangles[i][2]
-      C = triangles[i][3]
+      A, B, C = triangles[i][1], triangles[i][2], triangles[i][3]
 
       # Step 1: Calculate edges
-      edge1 = (B[1] - A[1], B[2] - A[2], B[3] - A[3])  # B - A
-      edge2 = (C[1] - A[1], C[2] - A[2], C[3] - A[3])  # C - A
+      edge1 = B .- A
+      edge2 = C .- A
 
-      normal = (
-        edge1[2] * edge2[3] - edge1[3] * edge2[2],  # i-component
-        edge1[3] * edge2[1] - edge1[1] * edge2[3],  # j-component
-        edge1[1] * edge2[2] - edge1[2] * edge2[1]   # k-component
-    )
+      # Step 2: Calculate the normal vector using the cross product
+      normal = cross(edge1, edge2)
 
-      norm_length = sqrt(normal[1]^2 + normal[2]^2 + normal[3]^2)
-      normalized_normal = (normal[1] / norm_length, normal[2] / norm_length, normal[3] / norm_length)
-      light_direction = normalize([0, 0, -1])  # Light coming from in front
-      dot_product = dot(normalized_normal, light_direction)  # Dot product of normal and light direction
-      luminance_value = (dot_product + 1) / 2  # Normalize from [-1, 1] to [0, 1]
+      # Step 3: Normalize the normal vector
+      norm_length = sqrt(sum(normal .^ 2))
+      normalized_normal = normal / norm_length
 
-      # Convert luminance_value to an index
+      # Step 4: Compute dot product with light direction (assumed from -Z axis)
+      light_direction = [0, 0, -1]
+      dot_product = dot(normalized_normal, light_direction)
+      
+      # Step 5: Incorporate Z-depth in luminance calculation
+      average_z = (A[3] + B[3] + C[3]) / 3  # Average Z value of the triangle
+      depth_factor = max(0, 1 - (average_z / distance))  # Depth effect (closer triangles are brighter)
+      
+      # Step 6: Combine dot product and depth factor to get final luminance
+      luminance_value = ((dot_product + 1) / 2) * depth_factor  # Normalize to range [0, 1]
+
+      # Convert luminance to character index and clamp between 1 and 12
       char_index = round(Int, luminance_value * (length(luminance) - 1))
-
-      # Get the corresponding character
-      light_value[i] = char_index + 1
+      char_index = clamp(char_index + 1, 1, length(luminance))  # Ensure index is between 1 and 12
+      light_values[i] = char_index  # Luminance index for triangle
    end
-   return light_value
+   return light_values
 end
+
+
 
 
 function cross2d(v1, v2)
@@ -150,22 +154,34 @@ function cross2d(v1, v2)
    return v1[1] * v2[2] - v1[2] * v2[1]
 end
 
-function rasterizeTriangle(point::Vector{Int16})
+# Function to project a 3D point onto 2D screen using perspective projection
+function project_point(point::Vector{Float64}, distance::Float64, center::Vector{Int16}, k1::Float64)
+   ooz = 1 / (distance + point[3])  # Z-depth projection (inverse of distance)
+   x_proj = round(Int16, center[1] + k1 * point[1] * ooz)  # X projection
+   y_proj = round(Int16, center[2] - k1 * point[2] * ooz)  # Y projection
+   return [x_proj, y_proj, ooz]  # Return ooz (Z-buffer comparison value)
+end
+
+function rasterizeTriangle(p::Vector{Int16})
    for i in 1:star_depth
       for j in 1:8
-         # AP x AB
-         alt_points = [point[2],point[1]]
-         first_edge = cross2d((alt_points -  star_triangles[i][j][1]),(star_triangles[i][j][2] - star_triangles[i][j][1])) 
-         #BP x BC
-         second_edge = cross2d((alt_points -  star_triangles[i][j][2]),(star_triangles[i][j][3] - star_triangles[i][j][2]))  
-         #CP x cA
-         third_edge = cross2d((alt_points - star_triangles[i][j][3]),(star_triangles[i][j][1] - star_triangles[i][j][3])) 
+         A = project_point(star_triangles[i][j][1], distance, center, k1)
+         B = project_point(star_triangles[i][j][2], distance, center, k1)
+         C = project_point(star_triangles[i][j][3], distance, center, k1)
 
-         if (first_edge >= 0  && second_edge >= 0 && third_edge >=0 ) || (first_edge <= 0  && second_edge <= 0 && third_edge <= 0)
-            if frame[point...] == ' ' || norms[i][j] > findfirst(frame[point...],luminance)
-               frame[point...] = luminance[norms[i][j]]
+         alt_points = [p[2],p[1]]
+         # Calculate barycentric weights
+         denom = (B[2] - C[2]) * (A[1] - C[1]) + (C[1] - B[1]) * (A[2] - C[2])
+         w1 = ((B[2] - C[2]) * (alt_points[1] - C[1]) + (C[1] - B[1]) * (alt_points[2] - C[2])) / denom
+         w2 = ((C[2] - A[2]) * (alt_points[1] - C[1]) + (A[1] - C[1]) * (alt_points[2] - C[2])) / denom
+         w3 = 1 - w1 - w2
+
+         if w1 >= 0 && w2 >= 0 && w3 >= 0  # Inside the triangle
+            z = w1 * A[3] + w2 * B[3] + w3 * C[3]  # Interpolate the ooz (1/Z) value
+            if z < z_buffer[p...]  # Check Z-buffer
+               z_buffer[p...] = z
+               frame[p...] = luminance[norms[i][j]]  # Update frame with luminance
             end
-            break
          end
       end
    end
@@ -199,6 +215,7 @@ z_rotation = [cos(δ) sin(δ) 0;
 while(true)
    print("\x1b[H") #Prints at the top left line
    frame = fill(' ', terminal_size)
+   z_buffer = fill(Inf, terminal_size)
    update_frame()
    for i in 1:terminal_size[1]
       for j in x_range
