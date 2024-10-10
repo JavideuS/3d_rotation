@@ -7,6 +7,21 @@ using LinearAlgebra
 #luminance = "@\$#*!=;:~-,."
 luminance = ".,-~:;=!*#\$@"
 
+yellow_palette = [
+    "\x1b[38;5;94m",   # Dark yellow
+    "\x1b[38;5;100m",  # Darker golden
+    "\x1b[38;5;136m",  # Gold
+    "\x1b[38;5;142m",  # Goldenrod
+    "\x1b[38;5;178m",  # Light goldenrod
+    "\x1b[38;5;184m",  # Yellowish
+    "\x1b[38;5;220m",  # Yellow-orange
+    "\x1b[38;5;226m",  # Bright yellow
+    "\x1b[38;5;227m",  # Pale yellow
+    "\x1b[38;5;228m",  # Lighter yellow
+    "\x1b[38;5;229m",  # Almost white-yellow
+    "\x1b[38;5;15m"    # White (brightest)
+]
+
 #Terminal size -> (heigth,width)
 terminal_size = displaysize(stdout)
 #Center
@@ -41,7 +56,7 @@ end
 x_range = round(Int16,(center[1] + outer_points[2][1])):round(Int16,(center[1] + outer_points[5][1]))
 #The star will use all the height so the y_range doesnt matter
 
-frame = fill(' ', terminal_size)
+frame = fill(" ", terminal_size)
 z_buffer = fill(Inf, terminal_size[1], terminal_size[2])
 
 #Setting the depth of the star
@@ -123,6 +138,33 @@ function project_point(point::Vector{Float64}, distance::Float64, center::Vector
    return [x_proj, y_proj, ooz]  # Return ooz (Z-buffer comparison value)
 end
 
+function apply_color_and_char(lum_index::Int)
+   # Map luminance to yellow shades
+   lum = ".,-~:;=!*#\$@"
+
+   colors = [
+    "\x1b[38;5;94m",   # Dark yellow
+    "\x1b[38;5;100m",  # Darker golden
+    "\x1b[38;5;136m",  # Gold
+    "\x1b[38;5;142m",  # Goldenrod
+    "\x1b[38;5;178m",  # Light goldenrod
+    "\x1b[38;5;184m",  # Yellowish
+    "\x1b[38;5;220m",  # Yellow-orange
+    "\x1b[38;5;226m",  # Bright yellow
+    "\x1b[38;5;227m",  # Pale yellow
+    "\x1b[38;5;228m",  # Lighter yellow
+    "\x1b[38;5;229m",  # Almost white-yellow
+    "\x1b[38;5;15m"    # White (brightest)
+]
+   
+   # Get color and character for the current lum_index
+   color = colors[clamp(lum_index, 1, length(colors))]
+   char = lum[clamp(lum_index, 1, length(lum))]
+   
+   # Return the combined color code and character as a string
+   return "$(color)$(char)\033[0m"  # Reset color with \033[0m
+end
+
 function rasterizeTriangle(p::Vector{Int16})
    for i in 1:star_depth
       for j in 1:8
@@ -163,12 +205,15 @@ function rasterizeTriangle(p::Vector{Int16})
 
                # Calculate luminance based on interpolated 3D normal
                lum_index = calculate_luminance(normal)
-               frame[p...] = luminance[lum_index]  # Update frame with the correct luminance
+               frame[p...] = apply_color_and_char(lum_index)  # Update frame with the correct luminance
             end
          end
       end
    end
 end
+
+
+
 
 
 
@@ -199,7 +244,7 @@ z_rotation = [cos(δ) sin(δ) 0;
 
 while(true)
    print("\x1b[H") #Prints at the top left line
-   global frame = fill(' ', terminal_size)
+   global frame = fill(" ", terminal_size)
    global z_buffer = fill(Inf, terminal_size)
    update_frame()
    for i in 1:terminal_size[1]
