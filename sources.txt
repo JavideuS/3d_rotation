@@ -1,0 +1,5 @@
+https://www.youtube.com/watch?v=p09i_hoFdd0&ab_channel=ServetGulnaroglu #3d cube asmr
+https://www.a1k0n.net/2011/07/20/donut-math.html #math donut
+https://erkaman.github.io/posts/fast_triangle_rasterization.html #triangle_rasterization
+https://nerdparadise.com/math/pointinatriangle #triangle_rasterization
+https://jtsorlinis.github.io/rendering-tutorial/ #Barycentric and interpolation
