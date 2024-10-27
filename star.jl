@@ -2,7 +2,7 @@
 using LinearAlgebra
 
 #Angles
-const α,β,δ = π/8, π/6, π/8
+const α,β,δ = π/5, π/6, π/8
 #Characters classified by luminance
 const luminance = ".,-~:;=!*#\$@"
 
@@ -72,7 +72,7 @@ z_buffer = fill(Inf, terminal_size[1], terminal_size[2])
 #Setting the depth of the star
 star_depth = 3
 #To set how far away you want the star from the screen
-distance= R * 1.5
+distance = R * 1.5
 
 #Vector containing center, outer vertex and inner vertex
 vertex_grid = [[outer_points...,inner_points...] for _ in 1:star_depth]
@@ -88,16 +88,6 @@ end
 star_triangles = [[[[0,0,0.0] for _ in 1:3] for _ in 1:8] for _ in 1:star_depth]
 
 k1= center[2]*distance*3/2.5((R+r))
-
-# Perspective Projection with depth influence
-function project_point(point::Vector{Float64}, distance::Float64, center::Vector{Int16}, k1::Float64)
-   ooz = 1 / (distance + point[3])  # Z-depth projection (inverse of distance)
-   x_proj = round(Int16, center[1] + k1 * point[1] * ooz)  # X projection
-   y_proj = round(Int16, center[2] - k1 * point[2] * ooz)  # Y projection
-   #Comparing with ooz instead of normal Z
-   #Since ooz is related to the screen
-   return [x_proj, y_proj, point[3]]  # Projected X, Y and Z (for Z-buffer)
-end
 
 #Now that we have the inner and outer points, now we can define the points for each triangle
 #Each triangle will safe its each 3 points
@@ -247,7 +237,7 @@ while(true)
    for (i,depth) in enumerate(vertex_grid)
       for (j,points) in enumerate(depth)               
          #It is formatted (y,x)               
-         vertex_grid[i][j] = x_rotation * y_rotation * points           
+         vertex_grid[i][j] = z_rotation * y_rotation * x_rotation * points           
       end
    end
    sleep(0.5)
