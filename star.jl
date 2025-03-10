@@ -2,7 +2,8 @@
 using LinearAlgebra
 
 #Angles
-const α,β,δ = π/5, π/6, π/8
+#const α,β,δ = π/5, π/6, π/8
+const α,β,δ = 0, π/15, 0
 #Characters classified by luminance
 const luminance = ".,-~:;=!*#\$@"
 
@@ -24,26 +25,17 @@ const yellow_palette = [
 #Terminal size -> (heigth,width)
 terminal_size = displaysize(stdout)
 #Center
-center = round.(Int16,[terminal_size[2]/2 ,terminal_size[1]/2 ])
-
-
-R=1
-#It takes the smaller axis
-if center[1] > center[2]
-   #Big radius
-   R = center[2]  
-else
-   R = center[1]
-end
+center = round.(Int16,[terminal_size[2]/2 ,terminal_size[1]/2])
+#Big radius
+R = center[2]  
 
 #Star outer points (edges)
 #Setting them to 0.0 since I will use all the terminal for calculations and just round it when printing the point
-#You treat the objecy as the center of the plane (not the screen)
+#You treat the object as the center of the plane (not the screen)
 outer_points = fill([0.0,0.0,0.0],5)
 
 θ = 72 #360/5
 
-#Starting at 90 degrees so the first point is in the positive y axis
 for i in 0:4
    current_θ = 90 + (i * θ)
    outer_points[i + 1] = [R* cosd(current_θ), R * sind(current_θ),0]
@@ -51,13 +43,13 @@ end
 
 #Small radius 
 r = R/2
-#Every outer points is supposed to have two more inner points, however, every triangles shares the inner point with other triangle
-#So technically we only need to use 5 inner points 
-
+#Each edge will have to corresponding inner points (But since each triangle share a point) it will only save half
 inner_points = [[0.0, 0.0,0.0] for _ in 1:5] 
 
 for i in 0:4
-   current_θ = 58 + (i * θ)
+   #Starting at 58 degrees since the offset is 36 degrees
+   #72/2 = 36, so the inner points are simetrically placed
+   current_θ = 54 + (i * θ)
    inner_points[i+1] = [r * cosd(current_θ), r * sind(current_θ),0]
 end
 
@@ -66,13 +58,13 @@ end
 x_range = round(Int16,(center[1] + outer_points[2][1])):round(Int16,(center[1] + outer_points[5][1]))
 #The star will use all the height so the y_range doesnt matter
 
-frame = fill(" ", terminal_size)
+frame = fill(' ', terminal_size)
 z_buffer = fill(Inf, terminal_size[1], terminal_size[2])
 
 #Setting the depth of the star
 star_depth = 3
 #To set how far away you want the star from the screen
-distance = R * 1.5
+distance= R * 1.5
 
 #Vector containing center, outer vertex and inner vertex
 vertex_grid = [[outer_points...,inner_points...] for _ in 1:star_depth]
@@ -114,11 +106,12 @@ function get_triangles(ext_points,int_points)
 end
 
 function calculate_luminance(normal::Vector{Float64})
-   light_direction = normalize([0.0, -1.0, -1.0])  # Light direction (From below)
+   light_direction = normalize([0, -1.0, -1.0])  # Light direction (From front and below)
    
    luminance_value = dot(normal, light_direction)  # Dot product of normal and light direction
-
+   
    # Normalize luminance value to range [0, 1]
+   # This helps for the values to be brighter
    luminance_value = (luminance_value + 1) / 2
 
    # Convert luminance value to character index
@@ -212,16 +205,16 @@ function print_frame(frame::Array,rows::Int, cols::Int)
 end
 
 const x_rotation = [1     0       0   ;
-              0   cos(α)  sin(α);
-              0   -sin(α) cos(α)]
+              0   cos(α)  -sin(α);
+              0   sin(α) cos(α)]
 
 const y_rotation = [cos(β) 0 sin(β);
                 0    1   0   ;
              -sin(β) 0 cos(β)]
 
-const z_rotation = [cos(δ) sin(δ) 0;
-             -sin(δ) cos(δ) 0;
-                0      0    1]
+const z_rotation = [cos(δ) -sin(δ) 0;
+                    sin(δ) cos(δ) 0;
+                    0      0    1]
 
 while(true)
    print("\x1b[H") #Prints at the top left line
