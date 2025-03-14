@@ -94,18 +94,10 @@ const α, β, δ = π/8, π/6, π/8
 const rotation_quat = euler_to_quat(α, β, δ)
 
 # Characters classified by luminance
-const luminance = ",~+*#@"  # Reduced set with clearer progression
-
-# const yellow_palette = [
-#     "\x1b[38;5;94m",   # Dark yellow
-#     "\x1b[38;5;136m",  # Gold
-#     "\x1b[38;5;178m",  # Light goldenrod
-#     "\x1b[38;5;220m",  # Yellow-orange
-#     "\x1b[38;5;226m",  # Bright yellow
-# ]
+const luminance = ",~+*#@"  
 
 const yellow_palette = [
-    "\x1b[38;5;58m",   # Dark olive/gold
+    "\x1b[38;5;94m",   # Dark olive/gold
     "\x1b[38;5;136m",  # Medium dark goldenrod
     "\x1b[38;5;178m",  # Dark gold
     "\x1b[38;5;220m",  # Gold
@@ -375,7 +367,7 @@ function rasterizeTriangle(p::Vector{Int16})
     end
 end
 
-# Add this helper function for edge detection
+#Helper function for edge detection
 function point_to_line_distance(point, line_start, line_end)
     if line_start == line_end
         return sqrt(sum((point .- line_start).^2))
@@ -423,31 +415,38 @@ function print_frame(frame::Array, rows::Int, cols::Int)
    return nothing
 end
 
-# Main loop
+print("\033[?25l")  # Hide cursor
+Base.exit_on_sigint(false)
 while true
-    print("\x1b[H") # Print at top left
-    global frame = fill(" ", terminal_size)
-    global z_buffer = fill(Inf, terminal_size)
-    update_frame()
-   
-    # Compute dynamic bounding box based on current star rotation
-    x_range, y_range = compute_bounding_box()
+    try
+        print("\x1b[H") # Print at top left
+        global frame = fill(" ", terminal_size)
+        global z_buffer = fill(Inf, terminal_size)
+        update_frame()
+    
+        # Compute dynamic bounding box based on current star rotation
+        x_range, y_range = compute_bounding_box()
 
-    for i in y_range
-        for j in x_range
-            rasterizeTriangle(round.(Int16, [i, j]))
+        for i in y_range
+            for j in x_range
+                rasterizeTriangle(round.(Int16, [i, j]))
+            end
         end
-    end
-    
-    print_frame(frame, terminal_size[1], terminal_size[2])
-    
-    # Rotate points using quaternions
-    for (i, depth) in enumerate(vertex_grid)
-        for (j, point) in enumerate(depth)
-            vertex_grid[i][j] = quat_rotate(point, rotation_quat)
+        
+        print_frame(frame, terminal_size[1], terminal_size[2])
+        
+        # Rotate points using quaternions
+        for (i, depth) in enumerate(vertex_grid)
+            for (j, point) in enumerate(depth)
+                vertex_grid[i][j] = quat_rotate(point, rotation_quat)
+            end
         end
+        
+        sleep(0.5)
+
+    catch e
+        println(" Stopping animation")
+        break
     end
-    
-    sleep(0.5)
-    println("\033[2J\033[H")  # Clear screen
 end
+print("\033[?25h")  # Show cursor when done
