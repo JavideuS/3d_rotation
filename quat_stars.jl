@@ -111,54 +111,13 @@ terminal_size = displaysize(stdout)
 center = round.(Int16, [terminal_size[2]/2, terminal_size[1]/2])
 # Big radius
 R = center[2]  
-
 # Star outer points (edges)
 outer_points = fill([0.0, 0.0, 0.0], 5)
-
 θ = 72 # 360/5
-
-for i in 0:4
-   current_θ = 90 + (i * θ)
-   outer_points[i + 1] = [R * cosd(current_θ), R * sind(current_θ), 0.0]
-end
-
 # Small radius 
 r = R/2
 # Inner points
 inner_points = [[0.0, 0.0, 0.0] for _ in 1:5] 
-
-for i in 0:4
-   current_θ = 54 + (i * θ)
-   inner_points[i+1] = [r * cosd(current_θ), r * sind(current_θ), 0.0]
-end
-
-# Define the range of the star in the terminal_matrix
-function compute_bounding_box()
-    # Find the min and max x,y values across all vertices in all layers
-    min_x, max_x = Inf, -Inf
-    min_y, max_y = Inf, -Inf
-    
-    for layer in 1:star_depth
-        for point in vertex_grid[layer]
-            # Project point to screen space
-            projected = project_point(point, distance, center, k1)
-            
-            min_x = min(min_x, projected[1])
-            max_x = max(max_x, projected[1])
-            min_y = min(min_y, projected[2])
-            max_y = max(max_y, projected[2])
-        end
-    end
-    
-    # Add padding and ensure bounds are within screen
-    padding = 5
-    min_x = max(1, round(Int16, min_x) - padding)
-    max_x = min(terminal_size[2], round(Int16, max_x) + padding)
-    min_y = max(1, round(Int16, min_y) - padding)
-    max_y = min(terminal_size[1], round(Int16, max_y) + padding)
-    
-    return min_x:max_x, min_y:max_y
-end
 
 frame = fill(' ', terminal_size)
 z_buffer = fill(Inf, terminal_size[1], terminal_size[2])
@@ -172,44 +131,61 @@ distance = R * 2.5  # Increased for better perspective effect
 # Create a tapered star structure - larger at front, smaller at back
 vertex_grid = [[] for _ in 1:star_depth]
 
+k1 = center[2] * distance * 3 / 2.5(R + r)
+
 # Scale factors for each layer (symmetric)
 scale_factors = [1/3, 2/3, 1, 2/3, 1/3]
 if star_depth == 3
     scale_factors = [1/2, 1, 1/2]
 end
 
-# Create layers with progressively smaller stars
-for layer in 1:star_depth
-    # Scale the points for this layer
-    scale = scale_factors[layer]
-    
-    # Create scaled outer points
-    layer_outer_points = similar(outer_points)
-    for i in 1:5
-        layer_outer_points[i] = [
-            outer_points[i][1] * scale,
-            outer_points[i][2] * scale,
-            (layer-1) * 0.6 # Increase z-spacing between layers
-        ]
+function recreate_star_vertices()
+    # Recreate outer points with new radius based on current terminal size
+    for i in 0:4
+        current_θ = 90 + (i * θ)
+        outer_points[i + 1] = [R * cosd(current_θ), R * sind(current_θ), 0.0]
     end
     
-    # Create scaled inner points
-    layer_inner_points = similar(inner_points)
-    for i in 1:5
-        layer_inner_points[i] = [
-            inner_points[i][1] * scale,
-            inner_points[i][2] * scale,
-            (layer-1) * 0.6 # Same z as outer points in same layer
-        ]
+    # Recreate inner points with new radius
+    for i in 0:4
+        current_θ = 54 + (i * θ)
+        inner_points[i+1] = [r * cosd(current_θ), r * sind(current_θ), 0.0]
     end
     
-    # Store this layer's points
-    vertex_grid[layer] = [layer_outer_points..., layer_inner_points...]
+    # Rebuild the vertex grid with new dimensions
+    for layer in 1:star_depth
+        # Scale the points for this layer
+        scale = scale_factors[layer]
+        
+        # Create scaled outer points
+        layer_outer_points = similar(outer_points)
+        for i in 1:5
+            layer_outer_points[i] = [
+                outer_points[i][1] * scale,
+                outer_points[i][2] * scale,
+                (layer-1) * 0.6 # Increase z-spacing between layers
+            ]
+        end
+        
+        # Create scaled inner points
+        layer_inner_points = similar(inner_points)
+        for i in 1:5
+            layer_inner_points[i] = [
+                inner_points[i][1] * scale,
+                inner_points[i][2] * scale,
+                (layer-1) * 0.6 # Same z as outer points in same layer
+            ]
+        end
+        
+        # Store this layer's points
+        vertex_grid[layer] = [layer_outer_points..., layer_inner_points...]
+    end
+    
 end
 
-star_triangles = [[[[0.0, 0.0, 0.0] for _ in 1:3] for _ in 1:8] for _ in 1:star_depth]
+recreate_star_vertices()
 
-k1 = center[2] * distance * 3 / 2.5(R + r)
+star_triangles = [[[[0.0, 0.0, 0.0] for _ in 1:3] for _ in 1:8] for _ in 1:star_depth]
 
 # Define triangles from points
 function get_triangles(ext_points, int_points)
@@ -258,6 +234,35 @@ function apply_color_and_char(lum_index::Int)
     
     return "$(color)$(char)\033[0m"  # Reset color with \033[0m
 end
+
+# Define the range of the star in the terminal_matrix
+function compute_bounding_box()
+    # Find the min and max x,y values across all vertices in all layers
+    min_x, max_x = Inf, -Inf
+    min_y, max_y = Inf, -Inf
+    
+    for layer in 1:star_depth
+        for point in vertex_grid[layer]
+            # Project point to screen space
+            projected = project_point(point, distance, center, k1)
+            
+            min_x = min(min_x, projected[1])
+            max_x = max(max_x, projected[1])
+            min_y = min(min_y, projected[2])
+            max_y = max(max_y, projected[2])
+        end
+    end
+    
+    # Add padding and ensure bounds are within screen
+    padding = 5
+    min_x = max(1, round(Int16, min_x) - padding)
+    max_x = min(terminal_size[2], round(Int16, max_x) + padding)
+    min_y = max(1, round(Int16, min_y) - padding)
+    max_y = min(terminal_size[1], round(Int16, max_y) + padding)
+    
+    return min_x:max_x, min_y:max_y
+end
+
 
 # Project a 3D point onto 2D screen using perspective projection
 function project_point(point::Vector{Float64}, distance::Float64, center::Vector{Int16}, k1::Float64)
@@ -417,8 +422,27 @@ end
 
 print("\033[?25l")  # Hide cursor
 Base.exit_on_sigint(false)
+last_size = terminal_size
 while true
     try
+        current_size = displaysize(stdout)
+        if current_size != last_size
+            # Terminal size changed, update related dimensions
+            global terminal_size = current_size
+            global center = round.(Int16, [terminal_size[2]/2, terminal_size[1]/2])
+            global R = center[2]  # Update radius based on new height
+            global r = R/2        # Update inner radius
+            
+            # Recreate vertex grid with new dimensions
+            recreate_star_vertices()
+            
+            # Update the constant k1 used in projection
+            global k1 = center[2] * distance * 3 / 2.5(R + r)
+            
+            # Store current size for future comparison
+            global last_size = terminal_size
+        end
+        
         print("\x1b[H") # Print at top left
         global frame = fill(" ", terminal_size)
         global z_buffer = fill(Inf, terminal_size)
