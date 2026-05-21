@@ -17,7 +17,7 @@ function animation_loop()
             # Rotate for next frame
             rotate_star_vertices!(rotation_quat)
             
-            sleep(0.3)
+            sleep(0.5)
         end
     catch e
         if isa(e, InterruptException)
